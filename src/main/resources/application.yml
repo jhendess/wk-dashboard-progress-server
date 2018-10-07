@@ -1,0 +1,26 @@
+#
+# General application configuration file for spring boot
+#
+
+# Spring configuration
+spring:
+  # Database configuration
+  datasource:
+    driver-class-name: org.h2.Driver
+    url: jdbc:h2:mem:xxx
+    username: SA
+    password:
+  jpa:
+    hibernate:
+      ddl-auto: none
+  jta:
+    bitronix:
+      properties:
+        warn-about-zero-resource-transaction: false
+
+  liquibase:
+    change-log: classpath:db/changelog/db.changelog-master.xml       # Use XML changelog for liquibase
+
+logging:
+  level:
+    org.xlrnet.wk.dashboardprogressserver: trace 

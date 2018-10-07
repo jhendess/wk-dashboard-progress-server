@@ -1,0 +1,65 @@
+<?xml version="1.1" encoding="UTF-8" standalone="no"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                   xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-3.5.xsd">
+    <changeSet id="1" author="jhendess">
+        <comment>Create initial history entry table</comment>
+        <createTable tableName="historic_progress" remarks="Table with historic progress information.">
+            <column name="id" type="CHAR(36)" remarks="Technical key.">
+                <constraints primaryKey="true" primaryKeyName="pk__historic_progress"/>
+            </column>
+            <column name="user_id" type="CHAR(36)" remarks="ID of the user for which the historic progress was recorded">
+                <constraints nullable="false"/>
+            </column>
+            <column name="request_time" type="BIGINT" remarks="Timestamp of the historic entry">
+                <constraints nullable="false"/>
+            </column>
+            <column name="initiate" type="INT" remarks="New items on no level.">
+                <constraints nullable="false"/>
+            </column>
+            <column name="apprentice1" type="INT" remarks="Items on level apprentice 1.">
+                <constraints nullable="false"/>
+            </column>
+            <column name="apprentice2" type="INT" remarks="Items on level apprentice 2.">
+                <constraints nullable="false"/>
+            </column>
+            <column name="apprentice3" type="INT" remarks="Items on level apprentice 3.">
+                <constraints nullable="false"/>
+            </column>
+            <column name="apprentice4" type="INT" remarks="Items on level apprentice 4.">
+                <constraints nullable="false"/>
+            </column>
+            <column name="guru1" type="INT" remarks="Items on level guru 1.">
+                <constraints nullable="false"/>
+            </column>
+            <column name="guru2" type="INT" remarks="Items on level guru 2.">
+                <constraints nullable="false"/>
+            </column>
+            <column name="master" type="INT" remarks="Items on level master.">
+                <constraints nullable="false"/>
+            </column>
+            <column name="enlightened" type="INT" remarks="Items on level enlightened.">
+                <constraints nullable="false"/>
+            </column>
+            <column name="burned" type="INT" remarks="Items on level burned.">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+        <createTable tableName="user">
+            <column name="id" type="CHAR(36)" remarks="Technical key.">
+                <constraints primaryKey="true" primaryKeyName="pk__user"/>
+            </column>
+            <column name="api_key" type="CHAR(36)" remarks="Last working API key of the user">
+                <constraints nullable="false"/>
+            </column>
+            <column name="user_name" type="VARCHAR(256)" remarks="Name of the user used in the WK web UI">
+                <constraints nullable="false"/>
+            </column>
+            <column name="last_request" type="DATETIME" remarks="Last time when an update was requested"/>
+        </createTable>
+        <addForeignKeyConstraint baseTableName="historic_progress" baseColumnNames="user_id"
+                                 constraintName="fk__historic_progress__user"
+                                 referencedTableName="user"
+                                 referencedColumnNames="id"/>
+    </changeSet>
+</databaseChangeLog>
