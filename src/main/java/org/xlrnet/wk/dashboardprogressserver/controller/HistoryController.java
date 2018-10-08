@@ -27,7 +27,8 @@ public class HistoryController {
     /** Cached map of last update times (avoid overloading WKs servers). */
     private ConcurrentHashMap<String, Instant> lastUpdates = new ConcurrentHashMap<>();
 
-    private static final int UPDATE_INTERVAL_SECONDS = 300;
+    /** Interval after which updates may be performed. */
+    private static final int UPDATE_INTERVAL_SECONDS = 60;
 
     @Autowired
     public HistoryController(HistoricEntryService historicEntryService, UserService userService) {
@@ -50,7 +51,7 @@ public class HistoryController {
         } catch (RuntimeException e) {
             LOGGER.error("Refreshing history of user {} failed", user.get().getUserName(), e);
         }
-        return historicEntryService.findAllByUserDescending(user.get());
+        return historicEntryService.findAllByUserAscending(user.get());
     }
 
     @Scheduled(cron = "0 0 */6 * * *")

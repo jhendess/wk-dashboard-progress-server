@@ -1,7 +1,11 @@
 package org.xlrnet.wk.dashboardprogressserver.service;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.ObjectReader;
+import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.commons.io.IOUtils;
 import org.springframework.stereotype.Service;
 import org.springframework.web.reactive.function.client.WebClient;
 import org.xlrnet.wk.dashboardprogressserver.api.wk.WkAssignmentCollection;
@@ -10,9 +14,14 @@ import org.xlrnet.wk.dashboardprogressserver.api.wk.WkUser;
 import org.xlrnet.wk.dashboardprogressserver.api.wk.WkUserResource;
 
 import javax.annotation.PostConstruct;
+import java.io.IOException;
+import java.io.InputStream;
+import java.net.URL;
+import java.net.URLConnection;
 import java.time.Duration;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.stream.IntStream;
 
 @Slf4j
 @Service
@@ -24,12 +33,20 @@ public class WaniKaniAccessService {
 
     private static final Duration DEFAULT_WAIT_TIMEOUT = Duration.ofSeconds(5);
 
+    private static final String BASE_URL = "https://api.wanikani.com/v2/";
+
     @Getter
     private WebClient client;
 
+    /** Jackson reader for the {@link WkAssignmentCollection} objects. */
+    private ObjectReader wkAssignmentReader;
+
     @PostConstruct
     public void initialize() {
-        client = WebClient.create("https://api.wanikani.com/v2/");
+        client = WebClient.create(BASE_URL);
+        ObjectMapper objectMapper = new ObjectMapper();
+        objectMapper.registerModule(new JavaTimeModule());
+        wkAssignmentReader = objectMapper.readerFor(WkAssignmentCollection.class);
     }
 
     public WkUser findUser(String apiKey) {
@@ -44,27 +61,52 @@ public class WaniKaniAccessService {
         LOGGER.debug("Fetching latest SRS level data for key {}", apiKey);
         Map<Integer, Integer> levelData = new HashMap<>();
 
-        WebClient.RequestHeadersSpec<?> headersSpec = getClient().get().uri(ASSIGNMENTS_ENDPOINT);
-        prepareHeader(headersSpec, apiKey);
-        WkAssignmentCollection assignmentCollection = headersSpec.retrieve().bodyToMono(WkAssignmentCollection.class).block(Duration.ofSeconds(3));
-
+        /*WkAssignmentCollection assignmentCollection = fetchAssignments(apiKey, BASE_URL + ASSIGNMENTS_ENDPOINT);
         updateLevelData(levelData, assignmentCollection);
+        
         if (assignmentCollection.getPageInfo() != null && assignmentCollection.getPageInfo().getNextUrl() != null) {
             String nextUrl = assignmentCollection.getPageInfo().getNextUrl();
             do {
                 LOGGER.debug("Fetching more available data for key {}", apiKey);
 
-                headersSpec = getClient().get().uri(nextUrl);
-                prepareHeader(headersSpec, apiKey);
-                assignmentCollection = headersSpec.retrieve().bodyToMono(WkAssignmentCollection.class).block(DEFAULT_WAIT_TIMEOUT);
+                assignmentCollection = fetchAssignments(apiKey, nextUrl);
                 updateLevelData(levelData, assignmentCollection);
 
                 nextUrl = assignmentCollection.getPageInfo() != null ? assignmentCollection.getPageInfo().getNextUrl() : null;
             } while (nextUrl != null);
 
-        }
+        }*/
+
+        IntStream.rangeClosed(0, 9)
+                .parallel()
+                .forEach(i -> {
+                    WkAssignmentCollection assignments = fetchAssignments(apiKey, BASE_URL + ASSIGNMENTS_ENDPOINT + "?srs_stages=" + i);
+                    levelData.put(i, assignments.getTotalCount());
+                });
 
         return levelData;
+    }
+
+    private WkAssignmentCollection fetchAssignments(String apiKey, String nextUrl) {
+        WkAssignmentCollection assignmentCollection;
+        URLConnection urlConnection = null;
+        try {
+            URL url = new URL(nextUrl);
+            urlConnection = url.openConnection();
+            urlConnection.addRequestProperty("Authorization", "Bearer " + apiKey);
+            urlConnection.setConnectTimeout(3000);
+            urlConnection.connect();
+            LOGGER.trace("Opening connection for {}", nextUrl);
+            InputStream inputStream = urlConnection.getInputStream();
+            assignmentCollection = wkAssignmentReader.readValue(inputStream);
+            LOGGER.trace("Received data for {}", nextUrl);
+        } catch (IOException e) {
+            LOGGER.error("Unexpected error while trying to fetch assignments");
+            throw new RuntimeException(e);
+        } finally {
+            IOUtils.close(urlConnection);
+        }
+        return assignmentCollection;
     }
 
     private void updateLevelData(Map<Integer, Integer> levelData, WkAssignmentCollection assignmentCollection) {

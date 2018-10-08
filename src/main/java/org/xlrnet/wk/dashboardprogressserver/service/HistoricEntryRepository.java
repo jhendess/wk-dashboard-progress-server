@@ -9,7 +9,7 @@ import java.util.List;
 
 public interface HistoricEntryRepository extends PagingAndSortingRepository<HistoricEntry, String> {
 
-    List<HistoricEntry> findAllByUserOrderByEpochSecondsDesc(User user);
+    List<HistoricEntry> findAllByUserOrderByEpochSecondsAsc(User user);
 
     List<HistoricEntry> findAllByUserOrderByEpochSecondsDesc(User user, Pageable pageable);
 

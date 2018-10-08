@@ -49,8 +49,8 @@ public class HistoricEntryService extends AbstractTransactionalService<HistoricE
         this.waniKaniAccessService = waniKaniAccessService;
     }
 
-    public List<HistoricEntry> findAllByUserDescending(User user) {
-        return getRepository().findAllByUserOrderByEpochSecondsDesc(user);
+    public List<HistoricEntry> findAllByUserAscending(User user) {
+        return getRepository().findAllByUserOrderByEpochSecondsAsc(user);
     }
 
     public void updateHistoricData(User user) {
