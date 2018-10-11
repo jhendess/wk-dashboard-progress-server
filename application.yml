@@ -1,0 +1,5 @@
+#
+# Custom configuration file for the WaniKani dashboard progress server.
+#
+
+wk-history.update-interval-seconds: 60

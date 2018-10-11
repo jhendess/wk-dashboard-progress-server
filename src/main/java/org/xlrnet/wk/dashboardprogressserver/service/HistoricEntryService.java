@@ -42,6 +42,7 @@ public class HistoricEntryService extends AbstractTransactionalService<HistoricE
      * @param crudRepository
      *         The crud repository for providing basic crud operations.
      * @param waniKaniAccessService
+     *         Service for accessing the WaniKani backend.
      */
     @Autowired
     public HistoricEntryService(HistoricEntryRepository crudRepository, WaniKaniAccessService waniKaniAccessService) {
@@ -56,21 +57,28 @@ public class HistoricEntryService extends AbstractTransactionalService<HistoricE
     public void updateHistoricData(User user) {
         Map<Integer, Integer> srsLevelData = waniKaniAccessService.fetchLatestSrsLevelData(user.getApiKey());
         HistoricEntry newEntry = new HistoricEntry();
+        boolean requestFailed = false;
         for (Map.Entry<Integer, BiConsumer<HistoricEntry, Integer>> integerBiConsumerEntry : SRS_SETTER_MAP.entrySet()) {
             Integer srsLevel = integerBiConsumerEntry.getKey();
             BiConsumer<HistoricEntry, Integer> consumer = integerBiConsumerEntry.getValue();
             Integer i = srsLevelData.get(srsLevel);
             if (i != null) {
-                consumer.accept(newEntry, i);
+                if (i < 0) {
+                    requestFailed = true;
+                } else {
+                    consumer.accept(newEntry, i);
+                }
             }
         }
         HistoricEntry lastEntry = findLastByUser(user);
 
-        if (lastEntry == null || isEntryDifferent(lastEntry, newEntry)) {
+        if (!requestFailed  && (lastEntry == null || isEntryDifferent(lastEntry, newEntry))) {
             newEntry.setUser(user);
             newEntry.setEpochSeconds(System.currentTimeMillis() / 1000);
             save(newEntry);
             LOGGER.debug("Updated historic data for user {}", user.getUserName());
+        } else if (requestFailed) {
+            LOGGER.warn("Request for user {} failed", user.getUserName());
         } else {
             LOGGER.debug("No updates for user {}", user.getUserName());
         }
@@ -91,6 +99,6 @@ public class HistoricEntryService extends AbstractTransactionalService<HistoricE
 
     private HistoricEntry findLastByUser(User user) {
         List<HistoricEntry> entries = getRepository().findAllByUserOrderByEpochSecondsDesc(user, PageRequest.of(0, 1));
-        return !entries.isEmpty() ? entries.get(0): null; 
+        return !entries.isEmpty() ? entries.get(0) : null;
     }
 }

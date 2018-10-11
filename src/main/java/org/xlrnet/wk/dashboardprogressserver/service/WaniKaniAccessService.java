@@ -10,16 +10,19 @@ import org.springframework.stereotype.Service;
 import org.xlrnet.wk.dashboardprogressserver.api.wk.WkAssignmentCollection;
 import org.xlrnet.wk.dashboardprogressserver.api.wk.WkUser;
 import org.xlrnet.wk.dashboardprogressserver.api.wk.WkUserResource;
+import org.xlrnet.wk.dashboardprogressserver.common.InvalidApiKeyException;
 
 import javax.annotation.PostConstruct;
 import javax.annotation.PreDestroy;
 import java.io.IOException;
 import java.io.InputStream;
+import java.net.HttpURLConnection;
 import java.net.URL;
 import java.net.URLConnection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -65,10 +68,10 @@ public class WaniKaniAccessService {
         executorService.shutdown();
     }
 
-    public WkUser findUser(String apiKey) {
+    public Optional<WkUser> findUser(String apiKey) throws InvalidApiKeyException {
         LOGGER.debug("Requesting user info for API key {}", apiKey);
         URLConnection urlConnection = null;
-        WkUserResource userWkResource;
+        WkUserResource userWkResource = null;
         try {
             URL url = new URL(BASE_URL + USER_ENDPOINT);
             urlConnection = url.openConnection();
@@ -76,16 +79,18 @@ public class WaniKaniAccessService {
             urlConnection.setConnectTimeout(3000);
             LOGGER.trace("Opening connection for {}", BASE_URL + USER_ENDPOINT);
             urlConnection.connect();
+            if (((HttpURLConnection) urlConnection).getResponseCode() == 401) {
+                throw new InvalidApiKeyException("Invalid API key: " + apiKey);
+            }
             InputStream inputStream = urlConnection.getInputStream();
             userWkResource = wkUserReader.readValue(inputStream);
             LOGGER.trace("Received data for {}", BASE_URL + USER_ENDPOINT);
         } catch (IOException e) {
-            LOGGER.error("Unexpected error while trying to fetch assignments");
-            throw new RuntimeException(e);
+            LOGGER.error("Unexpected error while trying to fetch user", e);
         } finally {
             IOUtils.close(urlConnection);
         }
-        return userWkResource.getData();
+        return userWkResource == null ? Optional.empty() : Optional.of(userWkResource.getData());
     }
 
     public Map<Integer, Integer> fetchLatestSrsLevelData(String apiKey) {
@@ -117,7 +122,7 @@ public class WaniKaniAccessService {
             assignmentCollection = wkAssignmentReader.readValue(inputStream);
             LOGGER.trace("Received data for {}", nextUrl);
         } catch (IOException e) {
-            LOGGER.error("Unexpected error while trying to fetch assignments");
+            LOGGER.error("Unexpected error while trying to fetch assignments", e);
             throw new RuntimeException(e);
         } finally {
             IOUtils.close(urlConnection);
@@ -133,8 +138,12 @@ public class WaniKaniAccessService {
 
         @Override
         public Void call() throws Exception {
-            WkAssignmentCollection assignments = fetchAssignments(apiKey, BASE_URL + ASSIGNMENTS_ENDPOINT + "?srs_stages=" + stage);
-            targetMap.put(stage, assignments.getTotalCount());
+            try {
+                WkAssignmentCollection assignments = fetchAssignments(apiKey, BASE_URL + ASSIGNMENTS_ENDPOINT + "?srs_stages=" + stage);
+                targetMap.put(stage, assignments.getTotalCount());
+            } catch (RuntimeException e) {
+                targetMap.put(stage, -1);
+            }
             return null;
         }
     }

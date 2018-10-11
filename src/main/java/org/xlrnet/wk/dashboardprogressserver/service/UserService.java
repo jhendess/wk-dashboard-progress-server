@@ -6,6 +6,7 @@ import org.springframework.stereotype.Service;
 import org.xlrnet.wk.dashboardprogressserver.api.entity.User;
 import org.xlrnet.wk.dashboardprogressserver.api.wk.WkUser;
 import org.xlrnet.wk.dashboardprogressserver.common.AbstractTransactionalService;
+import org.xlrnet.wk.dashboardprogressserver.common.InvalidApiKeyException;
 
 import java.util.Optional;
 
@@ -22,6 +23,7 @@ public class UserService extends AbstractTransactionalService<User, UserReposito
      * @param crudRepository
      *         The crud repository for providing basic crud operations.
      * @param waniKaniAccessService
+     *         Service for accessing the WaniKani backend.
      */
     @Autowired
     public UserService(UserRepository crudRepository, WaniKaniAccessService waniKaniAccessService) {
@@ -33,21 +35,25 @@ public class UserService extends AbstractTransactionalService<User, UserReposito
         return getRepository().findByApiKey(apiKey);
     }
 
-    public Optional<User> updateOrCreateUser(String apiKey) {
-        WkUser user = waniKaniAccessService.findUser(apiKey);
-        String name = user.getUsername();
-        Optional<User> persistedUser = getRepository().findByUserName(name);
+    public Optional<User> updateOrCreateUser(String apiKey) throws InvalidApiKeyException {
+        Optional<WkUser> user = waniKaniAccessService.findUser(apiKey);
+        if (user.isPresent()) {
+            String name = user.get().getUsername();
+            Optional<User> persistedUser = getRepository().findByUserName(name);
 
-        if (persistedUser.isPresent()) {
-            LOGGER.debug("Updating API key for user {}", name);
-            persistedUser.get().setApiKey(apiKey);
-            return Optional.of(save(persistedUser.get()));
+            if (persistedUser.isPresent()) {
+                LOGGER.debug("Updating API key for user {}", name);
+                persistedUser.get().setApiKey(apiKey);
+                return Optional.of(save(persistedUser.get()));
+            } else {
+                LOGGER.debug("Creating new persistent user {}", name);
+                User newUser = new User();
+                newUser.setApiKey(apiKey);
+                newUser.setUserName(name);
+                return Optional.of(save(newUser));
+            }
         } else {
-            LOGGER.debug("Creating new persistent user {}", name);
-            User newUser = new User();
-            newUser.setApiKey(apiKey);
-            newUser.setUserName(name);
-            return Optional.of(save(newUser));
+            return Optional.empty();
         }
     }
 }

@@ -2,10 +2,12 @@ package org.xlrnet.wk.dashboardprogressserver.controller;
 
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.xlrnet.wk.dashboardprogressserver.api.entity.HistoricEntry;
 import org.xlrnet.wk.dashboardprogressserver.api.entity.User;
+import org.xlrnet.wk.dashboardprogressserver.common.InvalidApiKeyException;
 import org.xlrnet.wk.dashboardprogressserver.service.HistoricEntryService;
 import org.xlrnet.wk.dashboardprogressserver.service.UserService;
 
@@ -14,6 +16,9 @@ import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 
+/**
+ * Main controller which should be used for interacting with historical progress data.
+ */
 @Slf4j
 @Service
 public class HistoryController {
@@ -28,7 +33,8 @@ public class HistoryController {
     private ConcurrentHashMap<String, Instant> lastUpdates = new ConcurrentHashMap<>();
 
     /** Interval after which updates may be performed. */
-    private static final int UPDATE_INTERVAL_SECONDS = 60;
+    @Value("${wk-history.update-interval-seconds}")
+    private int updateIntervalSeconds;
 
     @Autowired
     public HistoryController(HistoricEntryService historicEntryService, UserService userService) {
@@ -36,14 +42,20 @@ public class HistoryController {
         this.userService = userService;
     }
 
-    public List<HistoricEntry> fetchHistoryByApiKey(String apiKey) {
+    /**
+     * Fetches historical data using the given API key. If the history wasn't updated since the configured time interval, it
+     *
+     * @param apiKey API key which will be used for fetching.
+     * @return Historical data for the user.
+     */
+    public List<HistoricEntry> fetchHistoryByApiKey(String apiKey) throws InvalidApiKeyException {
         Optional<User> user = userService.findByApiKey(apiKey);
         if (!user.isPresent()) {
             user = userService.updateOrCreateUser(apiKey);
         }
 
         if (!user.isPresent()) {
-            throw new RuntimeException("Invalid API key");
+            throw new InvalidApiKeyException("Invalid API key: " + apiKey);
         }
 
         try {
@@ -66,7 +78,7 @@ public class HistoryController {
 
     private void updateHistoryForUser(User user) {
         Instant lastUpdate = lastUpdates.get(user.getUserName());
-        if (lastUpdate == null || lastUpdate.plusSeconds(UPDATE_INTERVAL_SECONDS).isBefore(Instant.now())) {
+        if (lastUpdate == null || lastUpdate.plusSeconds(updateIntervalSeconds).isBefore(Instant.now())) {
             historicEntryService.updateHistoricData(user);
             lastUpdates.put(user.getUserName(), Instant.now());
         } else {
